@@ -130,7 +130,7 @@ class EastRandomCropData(object):
                  max_tries=10,
                  min_crop_side_ratio=0.1,
                  keep_ratio=True,
-                 num_classes=8,
+                 num_classes=10,
                  **kwargs):
         self.size = size
         self.max_tries = max_tries

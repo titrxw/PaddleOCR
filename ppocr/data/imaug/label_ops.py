@@ -44,7 +44,7 @@ class ClsLabelEncode(object):
 
 
 class DetLabelEncode(object):
-    def __init__(self, label_list, num_classes=8, **kwargs):
+    def __init__(self, label_list, num_classes=10, **kwargs):
         self.num_classes = num_classes
         self.label_list = []
         if label_list:

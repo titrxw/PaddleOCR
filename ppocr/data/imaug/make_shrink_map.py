@@ -35,7 +35,7 @@ class MakeShrinkMap(object):
     Typically following the process of class `MakeICDARData`.
     '''
 
-    def __init__(self, min_text_size=8, shrink_ratio=0.4, num_classes=8, **kwargs):
+    def __init__(self, min_text_size=8, shrink_ratio=0.4, num_classes=10, **kwargs):
         self.min_text_size = min_text_size
         self.shrink_ratio = shrink_ratio
         self.num_classes = num_classes  #  添加了分类
