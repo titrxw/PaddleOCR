@@ -35,24 +35,24 @@ class MakeShrinkMap(object):
     Typically following the process of class `MakeICDARData`.
     '''
 
-    def __init__(self, min_text_size=8, shrink_ratio=0.4, **kwargs):
+    def __init__(self, min_text_size=8, shrink_ratio=0.4, num_classes=8, **kwargs):
         self.min_text_size = min_text_size
         self.shrink_ratio = shrink_ratio
-        if 'total_epoch' in kwargs and 'epoch' in kwargs and kwargs[
-                'epoch'] != "None":
-            self.shrink_ratio = self.shrink_ratio + 0.2 * kwargs[
-                'epoch'] / float(kwargs['total_epoch'])
+        self.num_classes = num_classes  #  添加了分类
 
     def __call__(self, data):
         image = data['image']
         text_polys = data['polys']
         ignore_tags = data['ignore_tags']
+        if self.num_classes > 1:
+            classes = data['classes']
 
         h, w = image.shape[:2]
         text_polys, ignore_tags = self.validate_polygons(text_polys,
                                                          ignore_tags, h, w)
         gt = np.zeros((h, w), dtype=np.float32)
         mask = np.ones((h, w), dtype=np.float32)
+        gt_class = np.zeros((h, w), dtype=np.float32)  # 新增分类
         for i in range(len(text_polys)):
             polygon = text_polys[i]
             height = max(polygon[:, 1]) - min(polygon[:, 1])
@@ -73,9 +73,7 @@ class MakeShrinkMap(object):
                 possible_ratios = np.arange(self.shrink_ratio, 1,
                                             self.shrink_ratio)
                 np.append(possible_ratios, 1)
-                # print(possible_ratios)
                 for ratio in possible_ratios:
-                    # print(f"Change shrink ratio to {ratio}")
                     distance = polygon_shape.area * (
                         1 - np.power(ratio, 2)) / polygon_shape.length
                     shrinked = padding.Execute(-distance)
@@ -91,8 +89,15 @@ class MakeShrinkMap(object):
                 for each_shirnk in shrinked:
                     shirnk = np.array(each_shirnk).reshape(-1, 2)
                     cv2.fillPoly(gt, [shirnk.astype(np.int32)], 1)
+                    if self.num_classes > 1:  # 绘制分类的mask
+                        cv2.fillPoly(gt_class, polygon.astype(np.int32)[np.newaxis, :, :], classes[i])
+
 
         data['shrink_map'] = gt
+
+        if self.num_classes > 1:
+            data['class_mask'] = gt_class
+
         data['shrink_mask'] = mask
         return data
 
