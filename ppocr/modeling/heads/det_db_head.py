@@ -67,7 +67,7 @@ class Head(nn.Layer):
             act="relu")
         self.conv3 = nn.Conv2DTranspose(
             in_channels=in_channels // 4,
-            out_channels=1,
+            out_channels=num_classes,
             kernel_size=kernel_list[2],
             stride=2,
             weight_attr=ParamAttr(

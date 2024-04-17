@@ -40,8 +40,10 @@ class DBLoss(nn.Layer):
                  beta=10,
                  ohem_ratio=3,
                  eps=1e-6,
+                 num_classes=10,
                  **kwargs):
         super(DBLoss, self).__init__()
+        self.num_classes = num_classes
         self.alpha = alpha
         self.beta = beta
         self.dice_loss = DiceLoss(eps=eps)
