@@ -56,7 +56,7 @@ class DBLoss(nn.Layer):
 
     def forward(self, predicts, labels):
         predict_maps = predicts['maps']
-        label_threshold_map, label_threshold_mask, label_shrink_map, label_shrink_mask = labels[
+        label_threshold_map, label_threshold_mask, label_shrink_map, label_shrink_mask, class_mask = labels[
             1:]
         shrink_maps = predict_maps[:, 0, :, :]
         threshold_maps = predict_maps[:, 1, :, :]
