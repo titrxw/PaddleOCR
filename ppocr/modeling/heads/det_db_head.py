@@ -65,6 +65,7 @@ class Head(nn.Layer):
             bias_attr=ParamAttr(
                 initializer=paddle.nn.initializer.Constant(value=1e-4)),
             act="relu")
+        num_classes = kwargs.get('num_classes', 10)
         self.conv3 = nn.Conv2DTranspose(
             in_channels=in_channels // 4,
             out_channels=num_classes,
