@@ -34,6 +34,7 @@ def get_bias_attr(k):
 class Head(nn.Layer):
     def __init__(self, in_channels, kernel_list=[3, 2, 2], **kwargs):
         super(Head, self).__init__()
+        self.num_classes = kwargs.get('num_classes', 10)
 
         self.conv1 = nn.Conv2D(
             in_channels=in_channels,
@@ -65,10 +66,9 @@ class Head(nn.Layer):
             bias_attr=ParamAttr(
                 initializer=paddle.nn.initializer.Constant(value=1e-4)),
             act="relu")
-        num_classes = kwargs.get('num_classes', 10)
         self.conv3 = nn.Conv2DTranspose(
             in_channels=in_channels // 4,
-            out_channels=num_classes,
+            out_channels=self.num_classes,
             kernel_size=kernel_list[2],
             stride=2,
             weight_attr=ParamAttr(
@@ -83,7 +83,8 @@ class Head(nn.Layer):
         if return_f is True:
             f = x
         x = self.conv3(x)
-        x = F.sigmoid(x)
+        if self.num_classes == 1:
+            x = F.sigmoid(x)
         if return_f is True:
             return x, f
         return x
@@ -103,18 +104,31 @@ class DBHead(nn.Layer):
         self.binarize = Head(in_channels, **kwargs)
         self.thresh = Head(in_channels, **kwargs)
 
+        self.num_classes = kwargs.get('num_classes', 10)
+        if self.num_classes != 1:
+            self.classes = Head(in_channels, **kwargs)
+        else:
+            self.classes = None
+
     def step_function(self, x, y):
         return paddle.reciprocal(1 + paddle.exp(-self.k * (x - y)))
 
     def forward(self, x, targets=None):
         shrink_maps = self.binarize(x)
         if not self.training:
-            return {'maps': shrink_maps}
+            if self.num_classes == 1:
+                return {'maps': shrink_maps}
+            else:
+                classes = paddle.argmax(self.classes(x), axis=1, keepdim=True, dtype='int32')
+                return {'maps': shrink_maps, "classes": classes}
 
         threshold_maps = self.thresh(x)
         binary_maps = self.step_function(shrink_maps, threshold_maps)
         y = paddle.concat([shrink_maps, threshold_maps, binary_maps], axis=1)
-        return {'maps': y}
+        if self.num_classes == 1:
+            return {'maps': y}
+        else:
+            return {'maps': y, "classes": self.classes(x)}
 
 
 class LocalModule(nn.Layer):

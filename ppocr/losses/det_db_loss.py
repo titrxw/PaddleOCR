@@ -22,8 +22,80 @@ from __future__ import print_function
 
 import paddle
 from paddle import nn
-
+import torch.nn.functional as F
 from .det_basic_loss import BalanceLoss, MaskL1Loss, DiceLoss
+
+
+class CrossEntropyLoss(nn.Layer):
+
+    def __init__(self,
+                 weight=None,
+                 ignore_index=255,
+                 top_k_percent_pixels=1.0,
+                 data_format='NCHW'):
+        super(CrossEntropyLoss, self).__init__()
+        self.ignore_index = ignore_index
+        self.top_k_percent_pixels = top_k_percent_pixels
+        self.EPS = 1e-8
+        self.data_format = data_format
+        if weight is not None:
+            self.weight = paddle.to_tensor(weight, dtype='float32')
+        else:
+            self.weight = None
+
+    def forward(self, logit, label, semantic_weights=None):
+        channel_axis = 1 if self.data_format == 'NCHW' else -1
+        if self.weight is not None and logit.shape[channel_axis] != len(
+                self.weight):
+            raise ValueError(
+                'The number of weights = {} must be the same as the number of classes = {}.'
+                .format(len(self.weight), logit.shape[channel_axis]))
+
+        if channel_axis == 1:
+            logit = paddle.transpose(logit, [0, 2, 3, 1])
+        label = label.astype('int64')
+        # In F.cross_entropy, the ignore_index is invalid, which needs to be fixed.
+        # When there is 255 in the label and paddle version <= 2.1.3, the cross_entropy OP will report an error, which is fixed in paddle develop version.
+        loss = F.cross_entropy(
+            logit,
+            label,
+            ignore_index=self.ignore_index,
+            reduction='none',
+            weight=self.weight)
+
+        return self._post_process_loss(logit, label, semantic_weights, loss)
+
+    def _post_process_loss(self, logit, label, semantic_weights, loss):
+        mask = label != self.ignore_index
+        mask = paddle.cast(mask, 'float32')
+        label.stop_gradient = True
+        mask.stop_gradient = True
+
+        if loss.ndim > mask.ndim:
+            loss = paddle.squeeze(loss, axis=-1)
+        loss = loss * mask
+        if semantic_weights is not None:
+            loss = loss * semantic_weights
+
+        if self.weight is not None:
+            _one_hot = F.one_hot(label, logit.shape[-1])
+            coef = paddle.sum(_one_hot * self.weight, axis=-1)
+        else:
+            coef = paddle.ones_like(label)
+
+        if self.top_k_percent_pixels == 1.0:
+            avg_loss = paddle.mean(loss) / (paddle.mean(mask * coef) + self.EPS)
+        else:
+            loss = loss.reshape((-1,))
+            top_k_pixels = int(self.top_k_percent_pixels * loss.numel())
+            loss, indices = paddle.topk(loss, top_k_pixels)
+            coef = coef.reshape((-1,))
+            coef = paddle.gather(coef, indices)
+            coef.stop_gradient = True
+            coef = coef.astype('float32')
+            avg_loss = loss.mean() / (paddle.mean(coef) + self.EPS)
+
+        return avg_loss
 
 
 class DBLoss(nn.Layer):
@@ -52,12 +124,16 @@ class DBLoss(nn.Layer):
             balance_loss=balance_loss,
             main_loss_type=main_loss_type,
             negative_ratio=ohem_ratio)
-        self.loss_classes = nn.CrossEntropyLoss()
+        self.loss_classes = CrossEntropyLoss()
 
     def forward(self, predicts, labels):
         predict_maps = predicts['maps']
-        label_threshold_map, label_threshold_mask, label_shrink_map, label_shrink_mask, class_mask = labels[
-            1:]
+        if self.num_classes > 1:
+            predict_classes = predicts['classes']
+            label_threshold_map, label_threshold_mask, label_shrink_map, label_shrink_mask, class_mask = labels[1:]
+        else:
+            label_threshold_map, label_threshold_mask, label_shrink_map, label_shrink_mask = labels[1:]
+
         shrink_maps = predict_maps[:, 0, :, :]
         threshold_maps = predict_maps[:, 1, :, :]
         binary_maps = predict_maps[:, 2, :, :]
@@ -70,21 +146,23 @@ class DBLoss(nn.Layer):
                                           label_shrink_mask)
         loss_shrink_maps = self.alpha * loss_shrink_maps
         loss_threshold_maps = self.beta * loss_threshold_maps
-        # CBN loss
-        if 'distance_maps' in predicts.keys():
-            distance_maps = predicts['distance_maps']
-            cbn_maps = predicts['cbn_maps']
-            cbn_loss = self.bce_loss(cbn_maps[:, 0, :, :], label_shrink_map,
-                                     label_shrink_mask)
-        else:
-            dis_loss = paddle.to_tensor([0.])
-            cbn_loss = paddle.to_tensor([0.])
 
-        loss_all = loss_shrink_maps + loss_threshold_maps \
-                   + loss_binary_maps
-        losses = {'loss': loss_all+ cbn_loss, \
-                  "loss_shrink_maps": loss_shrink_maps, \
-                  "loss_threshold_maps": loss_threshold_maps, \
-                  "loss_binary_maps": loss_binary_maps, \
-                  "loss_cbn": cbn_loss}
+        # 处理
+        if self.num_classes > 1:
+            loss_classes = self.loss_func(predict_classes, class_mask)
+
+            loss_all = loss_shrink_maps + loss_threshold_maps + loss_binary_maps + loss_classes
+
+            losses = {'loss': loss_all,
+                      "loss_shrink_maps": loss_shrink_maps,
+                      "loss_threshold_maps": loss_threshold_maps,
+                      "loss_binary_maps": loss_binary_maps,
+                      "loss_classes": loss_classes}
+        else:
+            loss_all = loss_shrink_maps + loss_threshold_maps + loss_binary_maps
+
+            losses = {'loss': loss_all,
+                      "loss_shrink_maps": loss_shrink_maps,
+                      "loss_threshold_maps": loss_threshold_maps,
+                      "loss_binary_maps": loss_binary_maps}
         return losses

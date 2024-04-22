@@ -256,6 +256,11 @@ def main():
         else:  # base rec model
             config["Architecture"]["Head"]["out_channels"] = char_num
 
+
+    if "num_classes" in config["Global"]:
+        config['Architecture']["Head"]['num_classes'] = config["Global"]["num_classes"]
+        config['Loss']['num_classes'] = config["Global"]["num_classes"]
+
     # for sr algorithm
     if config["Architecture"]["model_type"] == "sr":
         config['Architecture']["Transform"]['infer_mode'] = True

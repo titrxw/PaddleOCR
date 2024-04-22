@@ -47,46 +47,44 @@ class DetLabelEncode(object):
     def __init__(self, label_list, num_classes=10, **kwargs):
         self.num_classes = num_classes
         self.label_list = []
-        if label_list:
+        if label_list is not None:
             if isinstance(label_list, str):
-                with open(label_list, 'r+', encoding='utf-8') as f:
+                with open(label_list, "r+", encoding="utf-8") as f:
                     for line in f.readlines():
                         self.label_list.append(line.replace("\n", ""))
             else:
                 self.label_list = label_list
-        else:
-            assert ' please check label_list whether it is none or config is right'
 
-        if num_classes != len(self.label_list): # 校验分类数和标签的一致性
-            assert 'label_list length is not equal to the num_classes'
+        if num_classes != len(self.label_list):
+            assert "label_list长度与num_classes长度不符合"
 
     def __call__(self, data):
         label = data['label']
         label = json.loads(label)
         nBox = len(label)
-        boxes, txts, txt_tags, classes = [], [], [], []
+        boxes, txts, txt_tags = [], [], []
+        classes = []
         for bno in range(0, nBox):
             box = label[bno]['points']
-            txt = label[bno]['key_cls']  # 此处将kie中的参数作为分类读取
+            txt = label[bno]['transcription']
             boxes.append(box)
             txts.append(txt)
-
             if txt in ['*', '###']:
                 txt_tags.append(True)
                 if self.num_classes > 1:
                     classes.append(-2)
             else:
                 txt_tags.append(False)
-                if self.num_classes > 1:  # 将KIE内容的key标签作为分类标签使用
+                if self.num_classes > 1:
                     classes.append(int(self.label_list.index(txt)))
-
         if len(boxes) == 0:
-
             return None
         boxes = self.expand_points_num(boxes)
         boxes = np.array(boxes, dtype=np.float32)
-        txt_tags = np.array(txt_tags, dtype=np.bool_)
+        txt_tags = np.array(txt_tags, dtype=np.bool)
+        # classes = np.array(classes, dtype=np.int)
         classes = classes
+
         data['polys'] = boxes
         data['texts'] = txts
         data['ignore_tags'] = txt_tags
