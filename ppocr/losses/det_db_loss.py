@@ -22,7 +22,7 @@ from __future__ import print_function
 
 import paddle
 from paddle import nn
-import torch.nn.functional as F
+import paddle.nn.functional as F
 from .det_basic_loss import BalanceLoss, MaskL1Loss, DiceLoss
 
 
