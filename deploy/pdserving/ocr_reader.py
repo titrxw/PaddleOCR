@@ -416,6 +416,8 @@ class ArgsParser(ArgumentParser):
         self.add_argument("-c", "--config", help="configuration file to use")
         self.add_argument(
             "-o", "--opt", nargs='+', help="set configuration options")
+        self.add_argument(
+            "-lf", "--label_list_path", help="label_file_path")
 
     def parse_args(self, argv=None):
         args = super(ArgsParser, self).parse_args(argv)

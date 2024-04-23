@@ -22,10 +22,13 @@ import base64
 from ocr_reader import OCRReader, DetResizeForTest, ArgsParser
 from paddle_serving_app.reader import Sequential, ResizeByFactor
 from paddle_serving_app.reader import Div, Normalize, Transpose
-from paddle_serving_app.reader import DBPostProcess, FilterBoxes, GetRotateCropImage, SortedBoxes
+from paddle_serving_app.reader import FilterBoxes, GetRotateCropImage, SortedBoxes
+from image_reader import DBPostProcess
 
 _LOGGER = logging.getLogger()
 
+
+_label_list = []
 
 class DetOp(Op):
     def init_op(self):
@@ -56,13 +59,17 @@ class DetOp(Op):
         return {"x": det_img[np.newaxis, :].copy()}, False, None, ""
 
     def postprocess(self, input_dicts, fetch_dict, data_id, log_id):
-        det_out = list(fetch_dict.values())[0]
+        det_out = list(fetch_dict.values())[1]
         ratio_list = [
             float(self.new_h) / self.ori_h, float(self.new_w) / self.ori_w
         ]
-        dt_boxes_list = self.post_func(det_out, [ratio_list])
-        dt_boxes = self.filter_func(dt_boxes_list[0], [self.ori_h, self.ori_w])
-        out_dict = {"dt_boxes": dt_boxes, "image": self.raw_im}
+        opt = {
+            'maps': det_out,
+            'classes': list(fetch_dict.values())[0]
+        }
+        dt_boxes_list = self.post_func(opt, [ratio_list])
+        dt_boxes = self.filter_func(dt_boxes_list[0]['points'], [self.ori_h, self.ori_w])
+        out_dict = {"dt_boxes": dt_boxes, "image": self.raw_im, 'classes': dt_boxes_list[0]['classes']}
         return out_dict, None, ""
 
 
@@ -80,7 +87,8 @@ class RecOp(Op):
         data = np.frombuffer(raw_im, np.uint8)
         im = cv2.imdecode(data, cv2.IMREAD_COLOR)
         self.dt_list = input_dict["dt_boxes"]
-        self.dt_list = self.sorted_boxes(self.dt_list)
+        self.classes = input_dict["classes"]
+        # self.dt_list = self.sorted_boxes(self.dt_list)
         # deepcopy to save origin dt_boxes
         dt_boxes = copy.deepcopy(self.dt_list)
         feed_list = []
@@ -150,7 +158,12 @@ class RecOp(Op):
             text = rec_list[i]
             dt_box = self.dt_list[i]
             if text[1] >= 0.5:
-                result_list.append([text, dt_box.tolist()])
+                result_list.append({
+                    'text': text[0],
+                    'scores': text[1],
+                    'label': _label_list[self.classes[i]],
+                    'box': dt_box.tolist()
+                })
         res = {"result": str(result_list)}
         return res, None, ""
 
@@ -162,7 +175,21 @@ class OcrService(WebService):
         return rec_op
 
 
+def parse_label_list(label_file_path):
+    label_list = label_file_path
+    labels = []
+    if label_list is not None:
+        if isinstance(label_list, str):
+            with open(label_list, "r+", encoding="utf-8") as f:
+                for line in f.readlines():
+                    labels.append(line.replace("\n", ""))
+        else:
+            labels = label_list
+
+    return labels
+
 uci_service = OcrService(name="ocr")
 FLAGS = ArgsParser().parse_args()
+_label_list = parse_label_list(FLAGS.label_list_path)
 uci_service.prepare_pipeline_config(yml_dict=FLAGS.conf_dict)
 uci_service.run_service()
