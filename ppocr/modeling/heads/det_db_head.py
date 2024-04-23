@@ -83,8 +83,7 @@ class Head(nn.Layer):
         if return_f is True:
             f = x
         x = self.conv3(x)
-        if self.num_classes == 1:
-            x = F.sigmoid(x)
+        x = F.sigmoid(x)
         if return_f is True:
             return x, f
         return x

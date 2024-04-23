@@ -66,7 +66,7 @@ class DetLabelEncode(object):
         classes = []
         for bno in range(0, nBox):
             box = label[bno]['points']
-            txt = label[bno]['transcription']
+            txt = label[bno]['key_cls']
             boxes.append(box)
             txts.append(txt)
             if txt in ['*', '###']:

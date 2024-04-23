@@ -124,7 +124,8 @@ class DBLoss(nn.Layer):
             balance_loss=balance_loss,
             main_loss_type=main_loss_type,
             negative_ratio=ohem_ratio)
-        self.loss_classes = CrossEntropyLoss()
+
+        self.loss_func = CrossEntropyLoss()
 
     def forward(self, predicts, labels):
         predict_maps = predicts['maps']
