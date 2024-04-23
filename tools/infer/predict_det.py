@@ -31,6 +31,7 @@ from ppocr.utils.utility import get_image_file_list, check_and_read
 from ppocr.data import create_operators, transform
 from ppocr.postprocess import build_post_process
 import json
+
 logger = get_logger()
 
 
@@ -81,7 +82,7 @@ class TextDetector(object):
                 'NormalizeImage': {
                     'std': [1.0, 1.0, 1.0],
                     'mean':
-                    [0.48109378172549, 0.45752457890196, 0.40787054090196],
+                        [0.48109378172549, 0.45752457890196, 0.40787054090196],
                     'scale': '1./255.',
                     'order': 'hwc'
                 }
@@ -229,7 +230,7 @@ class TextDetector(object):
         data = transform(data, self.preprocess_op)
         img, shape_list = data
         if img is None:
-            return None, 0
+            return None, 0, None
         img = np.expand_dims(img, axis=0)
         shape_list = np.expand_dims(shape_list, axis=0)
         img = img.copy()
@@ -260,7 +261,9 @@ class TextDetector(object):
             preds['f_tco'] = outputs[2]
             preds['f_tvo'] = outputs[3]
         elif self.det_algorithm in ['DB', 'PSE', 'DB++']:
-            preds['maps'] = outputs[0]
+            preds['maps'] = outputs[1]
+            if self.args.num_classes is not None:
+                preds['classes'] = outputs[0]
         elif self.det_algorithm == 'FCE':
             for i, output in enumerate(outputs):
                 preds['level_{}'.format(i)] = output
@@ -273,6 +276,10 @@ class TextDetector(object):
         post_result = self.postprocess_op(preds, shape_list)
         dt_boxes = post_result[0]['points']
 
+        class_idx = None
+        if self.args.num_classes is not None:
+            class_idx = post_result[0]['classes']
+
         if self.args.det_box_type == 'poly':
             dt_boxes = self.filter_tag_det_res_only_clip(dt_boxes, ori_im.shape)
         else:
@@ -281,7 +288,8 @@ class TextDetector(object):
         if self.args.benchmark:
             self.autolog.times.end(stamp=True)
         et = time.time()
-        return dt_boxes, et - st
+
+        return dt_boxes, et - st, class_idx
 
     def __call__(self, img):
         # For image like poster with one side much greater than the other side,
@@ -289,6 +297,7 @@ class TextDetector(object):
         MIN_BOUND_DISTANCE = 50
         dt_boxes = np.zeros((0, 4, 2), dtype=np.float32)
         elapse = 0
+        class_idx = None
         if img.shape[0] / img.shape[1] > 2 and img.shape[0] > self.args.det_limit_side_len:
             start_h = 0
             end_h = 0
@@ -297,7 +306,7 @@ class TextDetector(object):
                 subimg = img[start_h: end_h, :]
                 if len(subimg) == 0:
                     break
-                sub_dt_boxes, sub_elapse = self.predict(subimg)
+                sub_dt_boxes, sub_elapse, class_idx = self.predict(subimg)
                 offset = start_h
                 # To prevent text blocks from being cut off, roll back a certain buffer area.
                 if len(sub_dt_boxes) == 0 or img.shape[1] - max([x[-1][1] for x in sub_dt_boxes]) > MIN_BOUND_DISTANCE:
@@ -327,7 +336,7 @@ class TextDetector(object):
                 subimg = img[:, start_w: end_w]
                 if len(subimg) == 0:
                     break
-                sub_dt_boxes, sub_elapse = self.predict(subimg)
+                sub_dt_boxes, sub_elapse, class_idx = self.predict(subimg)
                 offset = start_w
                 if len(sub_dt_boxes) == 0 or img.shape[0] - max([x[-1][0] for x in sub_dt_boxes]) > MIN_BOUND_DISTANCE:
                     start_w = end_w
@@ -349,8 +358,8 @@ class TextDetector(object):
                                              axis=0)
                 elapse += sub_elapse
         else:
-            dt_boxes, elapse = self.predict(img)
-        return dt_boxes, elapse
+            dt_boxes, elapse, class_idx = self.predict(img)
+        return dt_boxes, elapse, class_idx
 
 
 if __name__ == "__main__":
@@ -383,13 +392,13 @@ if __name__ == "__main__":
             imgs = img[:page_num]
         for index, img in enumerate(imgs):
             st = time.time()
-            dt_boxes, _ = text_detector(img)
+            dt_boxes, _, classes = text_detector(img)
             elapse = time.time() - st
             total_time += elapse
             if len(imgs) > 1:
                 save_pred = os.path.basename(image_file) + '_' + str(
                     index) + "\t" + str(
-                        json.dumps([x.tolist() for x in dt_boxes])) + "\n"
+                    json.dumps([x.tolist() for x in dt_boxes])) + "\n"
             else:
                 save_pred = os.path.basename(image_file) + "\t" + str(
                     json.dumps([x.tolist() for x in dt_boxes])) + "\n"
@@ -402,7 +411,7 @@ if __name__ == "__main__":
                 logger.info("{} The predict time of {}: {}".format(
                     idx, image_file, elapse))
 
-            src_im = utility.draw_text_det_res(dt_boxes, img)
+            src_im = utility.draw_text_det_res(dt_boxes, classes, args.label_file_path, img)
 
             if flag_gif:
                 save_file = image_file[:-3] + "png"

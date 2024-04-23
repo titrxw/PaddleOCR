@@ -66,6 +66,8 @@ def init_args():
     parser.add_argument("--max_batch_size", type=int, default=10)
     parser.add_argument("--use_dilation", type=str2bool, default=False)
     parser.add_argument("--det_db_score_mode", type=str, default="fast")
+    parser.add_argument("--num_classes", type=int, default="10")
+    parser.add_argument("--label_list_path", type=str, default="")
 
     # EAST parmas
     parser.add_argument("--det_east_score_thresh", type=float, default=0.8)
@@ -356,10 +358,26 @@ def draw_e2e_res(dt_boxes, strs, img_path):
     return src_im
 
 
-def draw_text_det_res(dt_boxes, img):
+def draw_text_det_res(dt_boxes, classes, label_file_path, img):
+    label_list = label_file_path
+    labels = []
+    if label_list is not None:
+        if isinstance(label_list, str):
+            with open(label_list, "r+", encoding="utf-8") as f:
+                for line in f.readlines():
+                    labels.append(line.replace("\n", ""))
+        else:
+            labels = label_list
+
+    index = 0
     for box in dt_boxes:
         box = np.array(box).astype(np.int32).reshape(-1, 2)
         cv2.polylines(img, [box], True, color=(255, 255, 0), thickness=2)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        img = cv2.putText(img, labels[classes[index]], (box[0][0], box[0][1]), font, 0.5, (255, 0, 0), 1)
+        index += 1
+
     return img
 
 

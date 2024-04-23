@@ -73,7 +73,8 @@ class TextSystem(object):
 
         start = time.time()
         ori_im = img.copy()
-        dt_boxes, elapse = self.text_detector(img)
+        dt_boxes, elapse, classes = self.text_detector(img)
+        print(classes)
         time_dict['det'] = elapse
 
         if dt_boxes is None:
