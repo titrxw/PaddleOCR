@@ -66,7 +66,7 @@ def init_args():
     parser.add_argument("--max_batch_size", type=int, default=10)
     parser.add_argument("--use_dilation", type=str2bool, default=False)
     parser.add_argument("--det_db_score_mode", type=str, default="fast")
-    parser.add_argument("--num_classes", type=int, default="10")
+    parser.add_argument("--num_classes", type=int, default="0")
     parser.add_argument("--label_list_path", type=str, default="")
 
     # EAST parmas
@@ -155,7 +155,8 @@ def init_args():
     parser.add_argument("--use_onnx", type=str2bool, default=False)
 
     # extended function
-    parser.add_argument("--return_word_box", type=str2bool, default=False, help='Whether return the bbox of each word (split by space) or chinese character. Only used in ppstructure for layout recovery')
+    parser.add_argument("--return_word_box", type=str2bool, default=False,
+                        help='Whether return the bbox of each word (split by space) or chinese character. Only used in ppstructure for layout recovery')
 
     return parser
 
@@ -309,7 +310,7 @@ def get_output_tensors(args, mode, predictor):
     output_names = predictor.get_output_names()
     output_tensors = []
     if mode == "rec" and args.rec_algorithm in [
-            "CRNN", "SVTR_LCNet", "SVTR_HGNet"
+        "CRNN", "SVTR_LCNet", "SVTR_HGNet"
     ]:
         output_name = 'softmax_0.tmp_0'
         if output_name in output_names:
@@ -362,7 +363,7 @@ def draw_text_det_res(dt_boxes, classes, label_file_path, img):
     label_list = label_file_path
     labels = []
     if label_list is not None:
-        if isinstance(label_list, str):
+        if isinstance(label_list, str) and os.path.isfile(label_file_path):
             with open(label_list, "r+", encoding="utf-8") as f:
                 for line in f.readlines():
                     labels.append(line.replace("\n", ""))
@@ -373,6 +374,9 @@ def draw_text_det_res(dt_boxes, classes, label_file_path, img):
     for box in dt_boxes:
         box = np.array(box).astype(np.int32).reshape(-1, 2)
         cv2.polylines(img, [box], True, color=(255, 255, 0), thickness=2)
+
+        if len(labels) <= 0:
+            continue
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         img = cv2.putText(img, labels[classes[index]], (box[0][0], box[0][1]), font, 0.5, (255, 0, 0), 1)
@@ -467,9 +471,9 @@ def draw_ocr_box_txt(image,
 
 def draw_box_txt_fine(img_size, box, txt, font_path="./doc/fonts/simfang.ttf"):
     box_height = int(
-        math.sqrt((box[0][0] - box[3][0])**2 + (box[0][1] - box[3][1])**2))
+        math.sqrt((box[0][0] - box[3][0]) ** 2 + (box[0][1] - box[3][1]) ** 2))
     box_width = int(
-        math.sqrt((box[0][0] - box[1][0])**2 + (box[0][1] - box[1][1])**2))
+        math.sqrt((box[0][0] - box[1][0]) ** 2 + (box[0][1] - box[1][1]) ** 2))
 
     if box_height > 2 * box_width and box_height > 30:
         img_text = Image.new('RGB', (box_height, box_width), (255, 255, 255))
@@ -508,7 +512,7 @@ def create_font(txt, sz, font_path="./doc/fonts/simfang.ttf"):
         length = font.getsize(txt)[0]
     else:
         length = font.getlength(txt)
-    
+
     if length > sz[0]:
         font_size = int(font_size * sz[0] / length)
         font = ImageFont.truetype(font_path, font_size, encoding="utf-8")

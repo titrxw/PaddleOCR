@@ -198,6 +198,6 @@ def parse_label_list(label_file_path):
 uci_service = OcrService(name="ocr")
 FLAGS = ArgsParser().parse_args()
 _label_list = parse_label_list(FLAGS.label_list_path)
-_num_classes = FLAGS.num_classes
+_num_classes = int(FLAGS.num_classes)
 uci_service.prepare_pipeline_config(yml_dict=FLAGS.conf_dict)
 uci_service.run_service()

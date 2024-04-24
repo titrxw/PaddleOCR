@@ -261,8 +261,9 @@ class TextDetector(object):
             preds['f_tco'] = outputs[2]
             preds['f_tvo'] = outputs[3]
         elif self.det_algorithm in ['DB', 'PSE', 'DB++']:
-            preds['maps'] = outputs[1]
-            if self.args.num_classes is not None:
+            _index = 1 if self.args.num_classes > 0 else 0
+            preds['maps'] = outputs[_index]
+            if self.args.num_classes > 0:
                 preds['classes'] = outputs[0]
         elif self.det_algorithm == 'FCE':
             for i, output in enumerate(outputs):
@@ -277,7 +278,7 @@ class TextDetector(object):
         dt_boxes = post_result[0]['points']
 
         class_idx = None
-        if self.args.num_classes is not None:
+        if self.args.num_classes > 0:
             class_idx = post_result[0]['classes']
 
         if self.args.det_box_type == 'poly':
@@ -411,7 +412,7 @@ if __name__ == "__main__":
                 logger.info("{} The predict time of {}: {}".format(
                     idx, image_file, elapse))
 
-            src_im = utility.draw_text_det_res(dt_boxes, classes, args.label_file_path, img)
+            src_im = utility.draw_text_det_res(dt_boxes, classes, args.label_list_path, img)
 
             if flag_gif:
                 save_file = image_file[:-3] + "png"
