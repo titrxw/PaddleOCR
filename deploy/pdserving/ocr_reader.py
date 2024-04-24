@@ -418,6 +418,8 @@ class ArgsParser(ArgumentParser):
             "-o", "--opt", nargs='+', help="set configuration options")
         self.add_argument(
             "-lf", "--label_list_path", help="label_file_path")
+        self.add_argument(
+            "-n", "--num_classes", help="num_classes", default="0")
 
     def parse_args(self, argv=None):
         args = super(ArgsParser, self).parse_args(argv)

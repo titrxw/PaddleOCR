@@ -29,6 +29,7 @@ _LOGGER = logging.getLogger()
 
 
 _label_list = []
+_num_classes = 0
 
 class DetOp(Op):
     def init_op(self):
@@ -59,14 +60,17 @@ class DetOp(Op):
         return {"x": det_img[np.newaxis, :].copy()}, False, None, ""
 
     def postprocess(self, input_dicts, fetch_dict, data_id, log_id):
-        det_out = list(fetch_dict.values())[1]
+        index = 1 if _num_classes > 0 else 0
+        det_out = list(fetch_dict.values())[index]
         ratio_list = [
             float(self.new_h) / self.ori_h, float(self.new_w) / self.ori_w
         ]
         opt = {
-            'maps': det_out,
-            'classes': list(fetch_dict.values())[0]
+            'maps': det_out
         }
+        if _num_classes > 0:
+            opt['classes'] = list(fetch_dict.values())[0]
+
         dt_boxes_list = self.post_func(opt, [ratio_list])
         dt_boxes = self.filter_func(dt_boxes_list[0]['points'], [self.ori_h, self.ori_w])
         out_dict = {"dt_boxes": dt_boxes, "image": self.raw_im, 'classes': dt_boxes_list[0]['classes']}
@@ -87,7 +91,7 @@ class RecOp(Op):
         data = np.frombuffer(raw_im, np.uint8)
         im = cv2.imdecode(data, cv2.IMREAD_COLOR)
         self.dt_list = input_dict["dt_boxes"]
-        self.classes = input_dict["classes"]
+        self.classes = input_dict.get('classes', [])
         # self.dt_list = self.sorted_boxes(self.dt_list)
         # deepcopy to save origin dt_boxes
         dt_boxes = copy.deepcopy(self.dt_list)
@@ -157,11 +161,14 @@ class RecOp(Op):
         for i in range(dt_num):
             text = rec_list[i]
             dt_box = self.dt_list[i]
+            label = ''
+            if len(self.classes) > 0 and len(_label_list) > 0:
+                label = _label_list[self.classes[i]]
             if text[1] >= 0.5:
                 result_list.append({
                     'text': text[0],
                     'scores': text[1],
-                    'label': _label_list[self.classes[i]],
+                    'label': label,
                     'box': dt_box.tolist()
                 })
         res = {"result": str(result_list)}
@@ -191,5 +198,6 @@ def parse_label_list(label_file_path):
 uci_service = OcrService(name="ocr")
 FLAGS = ArgsParser().parse_args()
 _label_list = parse_label_list(FLAGS.label_list_path)
+_num_classes = FLAGS.num_classes
 uci_service.prepare_pipeline_config(yml_dict=FLAGS.conf_dict)
 uci_service.run_service()
