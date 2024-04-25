@@ -81,7 +81,7 @@ class DetLabelEncode(object):
             return None
         boxes = self.expand_points_num(boxes)
         boxes = np.array(boxes, dtype=np.float32)
-        txt_tags = np.array(txt_tags, dtype=np.bool)
+        txt_tags = np.array(txt_tags, dtype=np.bool_)
         # classes = np.array(classes, dtype=np.int)
         classes = classes
 
