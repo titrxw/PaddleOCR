@@ -67,6 +67,7 @@ def init_args():
     parser.add_argument("--use_dilation", type=str2bool, default=False)
     parser.add_argument("--det_db_score_mode", type=str, default="fast")
     parser.add_argument("--num_classes", type=int, default="0")
+    parser.add_argument("--magnify_pixel", type=int, default="0")
     parser.add_argument("--label_list_path", type=str, default="")
 
     # EAST parmas
