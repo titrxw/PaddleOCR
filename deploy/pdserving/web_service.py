@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
+
 from paddle_serving_server.web_service import WebService, Op
 
 import logging
@@ -167,11 +169,11 @@ class RecOp(Op):
             if text[1] >= 0.5:
                 result_list.append({
                     "text": text[0],
-                    "scores": text[1],
+                    "scores": float(text[1]),
                     "label": label,
-                    "box": dt_box.tolist()
+                    "box": str(dt_box.tolist())
                 })
-        res = {"result": str(result_list)}
+        res = {"result": json.dumps(result_list)}
         return res, None, ""
 
 
