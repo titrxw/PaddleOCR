@@ -166,10 +166,10 @@ class RecOp(Op):
                 label = _label_list[self.classes[i]]
             if text[1] >= 0.5:
                 result_list.append({
-                    'text': text[0],
-                    'scores': text[1],
-                    'label': label,
-                    'box': dt_box.tolist()
+                    "text": text[0],
+                    "scores": text[1],
+                    "label": label,
+                    "box": dt_box.tolist()
                 })
         res = {"result": str(result_list)}
         return res, None, ""
